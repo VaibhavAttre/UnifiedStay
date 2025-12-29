@@ -1,0 +1,296 @@
+// Prisma schema for UnifiedStay
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// User & Authentication
+// ============================================
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  properties     Property[]
+  assignedTasks  Task[]     @relation("TaskAssignee")
+
+  @@map("users")
+}
+
+// ============================================
+// Property Management
+// ============================================
+
+model Property {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  name                String
+  address             String
+  timezone            String   @default("America/New_York")
+  defaultMinNights    Int      @default(1) @map("default_min_nights")
+  cleaningBufferHours Int      @default(4) @map("cleaning_buffer_hours")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  units           Unit[]
+  channelMappings ChannelMapping[]
+  tasks           Task[]
+  expenses        Expense[]
+  revenues        Revenue[]
+
+  @@index([userId])
+  @@map("properties")
+}
+
+model Unit {
+  id         String   @id @default(uuid())
+  propertyId String   @map("property_id")
+  name       String   @default("Main Unit")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  property           Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservations       Reservation[]
+  availabilityBlocks AvailabilityBlock[]
+
+  @@index([propertyId])
+  @@map("units")
+}
+
+// ============================================
+// Channel Integration
+// ============================================
+
+enum ChannelType {
+  airbnb
+  vrbo
+  booking
+  direct
+  other
+}
+
+model ChannelMapping {
+  id         String      @id @default(uuid())
+  propertyId String      @map("property_id")
+  channel    ChannelType
+  externalId String?     @map("external_id")
+  iCalUrl    String?     @map("ical_url")
+  
+  // Capability flags
+  capabilities Json @default("{\"calendarRead\": true, \"calendarWrite\": false, \"messagingRead\": false, \"messagingSend\": false, \"pricingWrite\": false, \"payoutsRead\": false}")
+  
+  // Sync tracking
+  lastSyncAt   DateTime? @map("last_sync_at")
+  lastSyncError String?  @map("last_sync_error")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, channel])
+  @@index([propertyId])
+  @@map("channel_mappings")
+}
+
+// ============================================
+// Calendar & Reservations
+// ============================================
+
+enum ReservationStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+model Reservation {
+  id          String            @id @default(uuid())
+  unitId      String            @map("unit_id")
+  channel     ChannelType
+  externalId  String?           @map("external_id")
+  guestName   String            @map("guest_name")
+  guestEmail  String?           @map("guest_email")
+  guestPhone  String?           @map("guest_phone")
+  checkIn     DateTime          @map("check_in") @db.Date
+  checkOut    DateTime          @map("check_out") @db.Date
+  status      ReservationStatus @default(confirmed)
+  totalAmount Decimal?          @map("total_amount") @db.Decimal(10, 2)
+  notes       String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  unit     Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+  revenues Revenue[]
+
+  // Unique constraint for external ID per channel
+  @@unique([channel, externalId])
+  @@index([unitId])
+  @@index([checkIn, checkOut])
+  @@map("reservations")
+}
+
+enum BlockType {
+  blocked
+  maintenance
+  hold
+}
+
+model AvailabilityBlock {
+  id        String    @id @default(uuid())
+  unitId    String    @map("unit_id")
+  type      BlockType
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime  @map("end_date") @db.Date
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@index([unitId])
+  @@index([startDate, endDate])
+  @@map("availability_blocks")
+}
+
+// ============================================
+// Tasks & Operations
+// ============================================
+
+enum TaskType {
+  cleaning
+  maintenance
+  inspection
+  restock
+  other
+}
+
+enum TaskStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+model Task {
+  id              String     @id @default(uuid())
+  propertyId      String     @map("property_id")
+  reservationId   String?    @map("reservation_id")
+  type            TaskType
+  status          TaskStatus @default(pending)
+  description     String?
+  dueAt           DateTime   @map("due_at")
+  assigneeId      String?    @map("assignee_id")
+  completedAt     DateTime?  @map("completed_at")
+  completionNotes String?    @map("completion_notes")
+  completionProof Json?      @map("completion_proof") // URLs to photos
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([status])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+// ============================================
+// Finance
+// ============================================
+
+enum ExpenseCategory {
+  cleaning
+  maintenance
+  supplies
+  utilities
+  mortgage
+  insurance
+  taxes
+  marketing
+  software
+  other
+}
+
+model Expense {
+  id          String          @id @default(uuid())
+  propertyId  String          @map("property_id")
+  category    ExpenseCategory
+  amount      Decimal         @db.Decimal(10, 2)
+  date        DateTime        @db.Date
+  description String?
+  receiptUrl  String?         @map("receipt_url")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([date])
+  @@index([category])
+  @@map("expenses")
+}
+
+model Revenue {
+  id            String       @id @default(uuid())
+  propertyId    String       @map("property_id")
+  reservationId String?      @map("reservation_id")
+  channel       ChannelType?
+  amount        Decimal      @db.Decimal(10, 2)
+  date          DateTime     @db.Date
+  description   String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([date])
+  @@map("revenues")
+}
+
+// ============================================
+// Sync & Audit Logs
+// ============================================
+
+model SyncLog {
+  id           String   @id @default(uuid())
+  channelMappingId String @map("channel_mapping_id")
+  startedAt    DateTime @default(now()) @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  status       String   // success, failed, partial
+  eventsFound  Int      @default(0) @map("events_found")
+  eventsCreated Int     @default(0) @map("events_created")
+  eventsUpdated Int     @default(0) @map("events_updated")
+  error        String?
+  
+  @@index([channelMappingId])
+  @@index([startedAt])
+  @@map("sync_logs")
+}
+

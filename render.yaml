@@ -1,0 +1,27 @@
+# Render Blueprint - Infrastructure as Code
+# Deploy with: https://render.com/deploy
+
+services:
+  # Backend API
+  - type: web
+    name: unifiedstay-api
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: pnpm install && pnpm turbo build --filter=api && cd packages/database && npx prisma generate
+    startCommand: cd apps/api && node dist/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false  # Set to your Vercel URL
+

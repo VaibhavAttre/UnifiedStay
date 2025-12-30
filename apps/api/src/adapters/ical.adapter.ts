@@ -1,10 +1,10 @@
 import ICAL from 'ical.js';
-import { db } from '@unifiedstay/database';
+import { db, ChannelType } from '@unifiedstay/database';
 
 // Use inline type to avoid Prisma generation dependency
 interface ChannelMappingInput {
   id: string;
-  channel: string;
+  channel: ChannelType;
   iCalUrl: string | null;
 }
 

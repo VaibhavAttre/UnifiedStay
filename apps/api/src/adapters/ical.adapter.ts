@@ -1,11 +1,20 @@
 import ICAL from 'ical.js';
-import { db, ChannelMapping } from '@unifiedstay/database';
+import { db } from '@unifiedstay/database';
 
-interface CalendarSyncResult {
+// Use inline type to avoid Prisma generation dependency
+interface ChannelMappingInput {
+  id: string;
+  channel: string;
+  iCalUrl: string | null;
+}
+
+export interface CalendarSyncResult {
   success: boolean;
   eventsFound: number;
   eventsCreated: number;
   eventsUpdated: number;
+  added: number;  // Alias for eventsCreated
+  updated: number; // Alias for eventsUpdated
   error?: string;
 }
 
@@ -18,13 +27,15 @@ interface ICalEvent {
 }
 
 class ICalAdapter {
-  async syncCalendar(mapping: ChannelMapping, unitId: string): Promise<CalendarSyncResult> {
+  async syncCalendar(mapping: ChannelMappingInput, unitId: string): Promise<CalendarSyncResult> {
     if (!mapping.iCalUrl) {
       return {
         success: false,
         eventsFound: 0,
         eventsCreated: 0,
         eventsUpdated: 0,
+        added: 0,
+        updated: 0,
         error: 'No iCal URL configured',
       };
     }
@@ -104,6 +115,8 @@ class ICalAdapter {
         eventsFound: events.length,
         eventsCreated,
         eventsUpdated,
+        added: eventsCreated,
+        updated: eventsUpdated,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -123,6 +136,8 @@ class ICalAdapter {
         eventsFound: 0,
         eventsCreated: 0,
         eventsUpdated: 0,
+        added: 0,
+        updated: 0,
         error: errorMessage,
       };
     }

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { db } from '@unifiedstay/database';
-import { iCalAdapter } from '../adapters/ical.adapter.js';
+import { iCalAdapter, type CalendarSyncResult } from '../adapters/ical.adapter.js';
 
 interface SyncResult {
   channelId: string;
@@ -12,8 +12,10 @@ interface SyncResult {
   error?: string;
 }
 
+import type { ScheduledTask } from 'node-cron';
+
 class SyncScheduler {
-  private task: cron.ScheduledTask | null = null;
+  private task: ScheduledTask | null = null;
   private isRunning = false;
   private lastRunAt: Date | null = null;
   private lastResults: SyncResult[] = [];

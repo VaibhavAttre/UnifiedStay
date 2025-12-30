@@ -192,7 +192,3 @@ The calendar automatically syncs every 30 minutes. You can also:
 - Click "Sync Now" on the Calendar page for immediate sync
 - Use `POST /api/calendar/sync/all` to sync all channels via API
 
-## License
-
-MIT
-

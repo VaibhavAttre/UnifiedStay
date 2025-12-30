@@ -176,9 +176,9 @@ pnpm format           # Format code
 
 See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for a complete step-by-step guide to deploy:
 
-- **Frontend** → Vercel (free)
-- **Backend** → Render (free)
-- **Database** → Neon Postgres (free)
+- **Frontend** → Vercel 
+- **Backend** → Render 
+- **Database** → Neon Postgres
 
 Quick overview:
 1. Create Neon database, copy connection string
